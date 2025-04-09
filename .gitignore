@@ -22,3 +22,29 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.so
+
+# 환경 설정 파일
+.env
+.venv
+*.env
+*.venv
+
+# macOS 시스템 파일
+.DS_Store
+
+# Jupyter Notebook 체크포인트
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# pyvenv 가상환경 디렉토리
+venv/
+ENV/
+env/
+
