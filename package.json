@@ -1,0 +1,29 @@
+{
+  "name": "hmark_app",
+  "version": "1.0.0",
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "cd frontend && npm run build",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.example.app",
+    "files": [
+      "electron/**/*",
+      "frontend/build/**/*",
+      "backend/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "backend",
+        "to": "backend"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "^27.3.11",
+    "electron-builder": "^24.13.3",
+    "electron-reload": "^2.0.0-alpha.1"
+  }
+}
