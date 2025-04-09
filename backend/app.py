@@ -1,16 +1,16 @@
 from flask import Flask, request, jsonify
-from folder_processor import process_repository  # ✅ import
+from hatbom_hashing import hatbom_hasing_main  # ✅ import
 import traceback
 
 app = Flask(__name__)
 
-@app.route('/save-file-list', methods=['POST'])
-def save_file_list():
+@app.route('/hatbom_vuddy_integ', methods=['POST'])
+def hatbom_vuddy_integ():
     try:
         data = request.get_json()
         folder_path = data.get('folderPath')
 
-        result = process_repository(folder_path)  # ✅ 외부 함수 호출
+        result = hatbom_hasing_main(folder_path)  # ✅ 외부 함수 호출
         print("저장경로 : ", result)
 
         return jsonify({"hidx": result})

@@ -86,7 +86,7 @@ def indexing_file(resDict, title, filePath):
         fres.flush()
         os.fsync(fres.fileno())
 
-def process_repository(inputPath):
+def hatbom_hasing_main(inputPath):
     warnings.filterwarnings("ignore", category=SyntaxWarning)
     inputPath = inputPath.replace("\\", "/")
     resDict, fileCnt, lineCnt = hashingFile(inputPath)

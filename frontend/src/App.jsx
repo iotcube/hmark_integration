@@ -12,7 +12,7 @@ function App() {
     const folderPath = await window.electronAPI.selectFolder();
     if (!folderPath) return;
 
-    const res = await fetch("http://localhost:5000/save-file-list", {
+    const res = await fetch("http://localhost:5000/hatbom_vuddy_integ", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ folderPath }),
