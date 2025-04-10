@@ -1,4 +1,3 @@
-// ✅ 2. electron/preload.js
 const { contextBridge, ipcRenderer } = require("electron");
 
 contextBridge.exposeInMainWorld("electronAPI", {
@@ -8,4 +7,6 @@ contextBridge.exposeInMainWorld("electronAPI", {
   close: () => ipcRenderer.send("window-close"),
   saveFile: (filename, content) =>
     ipcRenderer.invoke("save-file", filename, content),
+  saveZipFile: (defaultName, buffer) =>
+    ipcRenderer.invoke("save-zip-file", defaultName, buffer),
 });

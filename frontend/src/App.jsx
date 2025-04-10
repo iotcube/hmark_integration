@@ -1,44 +1,127 @@
 import { useState } from "react";
-import { Box, Button, Typography, IconButton } from "@mui/material";
+import { Box, Button, Typography, IconButton, Tabs, Tab } from "@mui/material";
 import MinimizeIcon from "@mui/icons-material/Remove";
 import MaximizeIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import CloseIcon from "@mui/icons-material/Close";
+import JSZip from "jszip";
 
 function App() {
   const [message, setMessage] = useState("");
   const [savedPath, setSavedPath] = useState("");
+  const [vuddyMessage, setVuddyMessage] = useState("");
+  const [vuddySavedPath, setVuddySavedPath] = useState("");
+  const [zipPath, setZipPath] = useState("");
+  const [tab, setTab] = useState(0);
+
+  const handleTabChange = (event, newValue) => {
+    setTab(newValue);
+  };
 
   const handleClick = async () => {
     const folderPath = await window.electronAPI.selectFolder();
     if (!folderPath) return;
 
-    const res = await fetch("http://localhost:5000/hatbom_vuddy_integ", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folderPath }),
-    });
+    const postToApi = async (endpoint) => {
+      const res = await fetch(`http://localhost:5000/${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folderPath }),
+      });
+      return res.json();
+    };
 
-    const data = await res.json();
+    try {
+      const [hatbomData, vuddyData] = await Promise.all([
+        postToApi("hatbom_hash"),
+        postToApi("vuddy_hash"),
+      ]);
 
-    if (data.hidx) {
-      setMessage(data.hidx);
+      const extractRepoName = (hidx) => {
+        const firstLine = hidx.split("\n")[0];
+        const tokens = firstLine.trim().split(" ");
+        return tokens[1] || "result";
+      };
 
-      // 🔍 첫 줄에서 repo 이름 추출
-      const firstLine = data.hidx.split("\n")[0];
-      const tokens = firstLine.trim().split(" ");
-      const repoName = tokens[1] || "result"; // 두 번째 단어 (없으면 기본값 'result')
+      let hatbomFileName = "",
+        vuddyFileName = "";
+      let hatbomSavedPath = "",
+        vuddySavedPath = "";
 
-      const filename = `hashmark_0_${repoName}.hidx`;
-
-      // 저장 요청
-      const saved = await window.electronAPI.saveFile(filename, data.hidx);
-      if (saved) {
-        setSavedPath(saved);
+      // hatbom
+      if (hatbomData.hidx) {
+        setMessage(hatbomData.hidx);
+        const repoName = extractRepoName(hatbomData.hidx);
+        hatbomFileName = `hashmark_0_${repoName}.hidx`;
+        hatbomSavedPath = await window.electronAPI.saveFile(
+          hatbomFileName,
+          hatbomData.hidx
+        );
+        setSavedPath(hatbomSavedPath || "❌ 저장 실패");
       } else {
-        setSavedPath("❌ 저장 실패");
+        setMessage("❌ hatbom 서버 오류");
       }
-    } else {
-      setMessage("❌ 서버 오류");
+
+      // vuddy
+      if (vuddyData.hidx) {
+        setVuddyMessage(vuddyData.hidx);
+        const repoName = extractRepoName(vuddyData.hidx);
+        vuddyFileName = `hashmark_4_${repoName}.hidx`;
+        vuddySavedPath = await window.electronAPI.saveFile(
+          vuddyFileName,
+          vuddyData.hidx
+        );
+        setVuddySavedPath(vuddySavedPath || "❌ 저장 실패");
+      } else {
+        setVuddyMessage("❌ vuddy 서버 오류");
+      }
+
+      // ✅ 둘 다 성공했을 때 zip 생성
+      if (
+        hatbomData.hidx &&
+        vuddyData.hidx &&
+        hatbomSavedPath &&
+        vuddySavedPath
+      ) {
+        try {
+          const zip = new JSZip();
+          zip.file("test.hidx", hatbomData.hidx);
+          zip.file(vuddyFileName, vuddyData.hidx);
+          const zipBuffer = await zip.generateAsync({ type: "uint8array" });
+
+          const zipSavePath = await window.electronAPI.saveZipFile(
+            "hashmark_result.zip",
+            zipBuffer
+          );
+          setZipPath(zipSavePath || "❌ zip 저장 실패");
+        } catch (zipErr) {
+          setZipPath(`❌ zip 생성 실패 ${zipErr}`);
+        }
+      }
+    } catch (err) {
+      console.error("❌ 통신 에러:", err);
+      setMessage("❌ 요청 실패");
+      setVuddyMessage("❌ 요청 실패");
+    }
+  };
+
+  const handleZipDownload = async () => {
+    if (!message || !vuddyMessage) return;
+
+    const zip = new JSZip();
+    const filename1 = savedPath.split(/[\\/]/).pop() || "hatbom.hidx";
+    const filename2 = vuddySavedPath.split(/[\\/]/).pop() || "vuddy.hidx";
+
+    zip.file(filename1, message);
+    zip.file(filename2, vuddyMessage);
+
+    const zipBuffer = await zip.generateAsync({ type: "uint8array" });
+
+    const savedZipPath = await window.electronAPI.saveZipFile(
+      "hashmark_result.zip",
+      zipBuffer
+    );
+    if (savedZipPath) {
+      setZipPath(savedZipPath);
     }
   };
 
@@ -97,33 +180,69 @@ function App() {
           폴더 선택
         </Button>
 
+        <Tabs
+          value={tab}
+          onChange={handleTabChange}
+          TabIndicatorProps={{ style: { display: "none" } }}
+          sx={{ mt: 3 }}
+        >
+          <Tab label="Hatbom 결과" sx={tabStyle} />
+          <Tab label="Vuddy 결과" sx={tabStyle} />
+        </Tabs>
+
         <Box
           sx={{
-            mt: 2,
+            mt: 1,
             p: 2,
-            backgroundColor: "#f0f0f0",
+            backgroundColor: "rgb(240, 240, 240)",
             borderRadius: 2,
             fontFamily: "monospace",
             fontSize: 13,
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
-            maxHeight: 300,
-            minHeight: 300,
+            height: 300,
             overflowY: "auto",
           }}
         >
-          {message}
+          {tab === 0 ? message : vuddyMessage}
         </Box>
 
-        {savedPath && (
-          <Typography sx={{ mt: 2, fontSize: 14, color: "#555" }}>
-            📁 저장 위치: <br />
-            <code>{savedPath}</code>
-          </Typography>
+        <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
+          📁 저장 위치: <br />
+          <code>{tab === 0 ? savedPath : vuddySavedPath}</code>
+        </Typography>
+
+        {/* zip 다운로드 버튼 */}
+        {message && vuddyMessage && (
+          <Box sx={{ mt: 2 }}>
+            <Button variant="outlined" onClick={() => handleZipDownload()}>
+              ZIP 다운로드
+            </Button>
+            {zipPath && (
+              <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
+                🗜️ 저장된 ZIP 경로: <br />
+                <code>{zipPath}</code>캬ㅔ
+              </Typography>
+            )}
+          </Box>
         )}
       </Box>
     </Box>
   );
 }
+
+const tabStyle = {
+  textTransform: "none",
+  minWidth: 120,
+  fontWeight: 500,
+  bgcolor: "transparent",
+  "&:hover": {
+    bgcolor: "rgb(230, 230, 230)",
+  },
+  "&.Mui-selected": {
+    bgcolor: "transparent",
+    color: "black",
+  },
+};
 
 export default App;
