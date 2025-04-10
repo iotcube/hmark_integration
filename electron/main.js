@@ -1,15 +1,12 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
-const fs = require("fs");
-const os = require("os");
 const { spawn } = require("child_process");
-
-let flaskProcess = null;
+const os = require("os");
+const fs = require("fs");
 
 // ✨ GPU 충돌 방지
 app.disableHardwareAcceleration();
 
-// ✅ 폴더 선택
 ipcMain.handle("select-folder", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openDirectory"],
@@ -18,38 +15,19 @@ ipcMain.handle("select-folder", async () => {
   return result.filePaths[0];
 });
 
-// ✅ 파일 저장 (.hidx 등)
+// 현재 실행 파일이 있는 디렉토리 기준 저장
 ipcMain.handle("save-file", async (event, filename, content) => {
   try {
-    const savePath = path.join(process.cwd(), filename); // 또는 dialog로 경로 받아도 됨
+    const savePath = path.join(process.cwd(), filename); // 현재 경로에 저장
     fs.writeFileSync(savePath, content, "utf-8");
     return savePath;
   } catch (e) {
-    console.error("❌ 파일 저장 실패:", e);
     return null;
   }
 });
 
-// ✅ ZIP 저장
-ipcMain.handle("save-zip-file", async (event, defaultName, buffer) => {
-  try {
-    const { filePath, canceled } = await dialog.showSaveDialog({
-      title: "ZIP 파일 저장",
-      defaultPath: defaultName,
-      filters: [{ name: "ZIP Files", extensions: ["zip"] }],
-    });
+let flaskProcess = null;
 
-    if (canceled || !filePath) return null;
-
-    fs.writeFileSync(filePath, Buffer.from(buffer));
-    return filePath;
-  } catch (err) {
-    console.error("❌ ZIP 저장 실패:", err);
-    return null;
-  }
-});
-
-// ✅ 창 제어
 ipcMain.on("window-minimize", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.minimize();
@@ -67,8 +45,16 @@ ipcMain.on("window-close", () => {
   if (win) win.close();
 });
 
-// ✅ 창 생성
 function createWindow() {
+  // const win = new BrowserWindow({
+  //   width: 800,
+  //   height: 600,
+  //   webPreferences: {
+  //     preload: path.join(__dirname, "preload.js"),
+  //     contextIsolation: true,
+  //   },
+  // });
+
   const win = new BrowserWindow({
     width: 800,
     height: 900,
@@ -81,23 +67,22 @@ function createWindow() {
     },
   });
 
-  // 개발용
-  // win.loadURL("http://localhost:5173");
-
-  // 배포용
-  win.loadFile(path.join(__dirname, "../frontend/dist/index.html"));
+  win.loadFile(path.join(__dirname, "../frontend/dist/index.html")); //실제 배포 시
+  // win.loadFile(path.join(__dirname, "http://localhost:5173")); // 개발 핫리로드 작동 시
 }
 
-// ✅ Flask 서버 실행 및 Electron 앱 초기화
 app.whenReady().then(() => {
+  // 가상환경의 Python 경로 설정
   const backendPath = path.join(__dirname, "../backend");
   const scriptPath = path.join(backendPath, "app.py");
 
+  // OS에 따라 가상환경의 python 경로 다르게 설정
   const venvPython =
     os.platform() === "win32"
-      ? path.join(backendPath, "venv", "Scripts", "python.exe")
-      : path.join(backendPath, "venv", "bin", "python");
+      ? path.join(backendPath, "venv", "Scripts", "python.exe") // Windows
+      : path.join(backendPath, "venv", "bin", "python"); // macOS/Linux
 
+  // Flask 서버 실행
   flaskProcess = spawn(venvPython, [scriptPath]);
 
   flaskProcess.stdout.on("data", (data) => {
@@ -109,12 +94,11 @@ app.whenReady().then(() => {
     if (text.includes("Traceback") || text.includes("Error")) {
       console.error(`[Flask ERROR] ${text}`);
     } else {
-      console.log(`[Flask ACCESS LOG] : `, text.trim());
+      console.log(`[Flask ACCESS LOG] : `, JSON.stringify(text, 2, null)); // ← 여기로 보냄
     }
   });
-
   flaskProcess.on("error", (err) => {
-    console.error("❌ Flask 프로세스 실행 실패:", err);
+    console.error("Failed to start Flask process:", err);
   });
 
   createWindow();

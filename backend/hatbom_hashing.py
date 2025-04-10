@@ -56,27 +56,49 @@ def removePyComment(tree):
 def normalize(string):
     return ''.join(string.replace('\n', '').replace('\r', '').replace('\t', '').replace('{', '').replace('}', '').split(' ')).lower()
 
-def hashingFile(repoPath):
+def hashingFile(repoPath, logger=None, progress_callback=None):
     possible_extensions = (".c", ".cc", ".cpp", ".py", ".java")
     fileCnt = 0
     lineCnt = 0
     resDict = {}
 
+    # 🔍 먼저 전체 대상 파일 리스트를 수집
+    allTargetFiles = []
     for path, _, files in os.walk(repoPath):
         for file in files:
             if file.endswith(possible_extensions):
-                filePath = os.path.join(path, file)
-                ext = file.split('.')[-1]
-                try:
-                    fileHash = md5File(filePath, ext)
-                    with open(filePath, 'rb') as f:
-                        lineCnt += len(f.readlines())
-                    fileCnt += 1
-                    resDict.setdefault(fileHash, []).append(filePath.replace(repoPath, "", 1))
-                except Exception as e:
-                    print(f"Error hashing file {filePath}: {e}")
+                allTargetFiles.append(os.path.join(path, file))
+
+    totalFiles = len(allTargetFiles)
+
+    for idx, filePath in enumerate(allTargetFiles):
+        ext = filePath.split('.')[-1]
+        try:
+            if logger:
+                logger(f"{filePath} 해싱 중...")
+
+            fileHash = md5File(filePath, ext)
+
+            with open(filePath, 'rb') as f:
+                lineCnt += len(f.readlines())
+            fileCnt += 1
+            resDict.setdefault(fileHash, []).append(filePath.replace(repoPath, "", 1))
+
+            if logger:
+                logger(f"{filePath} → {fileHash}")
+
+            # ✅ 진행률 콜백 호출
+            if progress_callback:
+                progress_callback(current=idx + 1, total=totalFiles)
+
+        except Exception as e:
+            msg = f" Error hashing file {filePath}: {e}"
+            print(msg)
+            if logger:
+                logger(msg)
 
     return resDict, fileCnt, lineCnt
+
 
 def indexing_file(resDict, title, filePath):
     with open(filePath, 'w') as fres:
@@ -86,18 +108,27 @@ def indexing_file(resDict, title, filePath):
         fres.flush()
         os.fsync(fres.fileno())
 
-def hatbom_hasing_main(inputPath):
+def hatbom_hasing_main(inputPath, logger=None, progress_callback=None):
     warnings.filterwarnings("ignore", category=SyntaxWarning)
     inputPath = inputPath.replace("\\", "/")
-    resDict, fileCnt, lineCnt = hashingFile(inputPath)
+
+    resDict, fileCnt, lineCnt = hashingFile(inputPath, logger=logger, progress_callback=progress_callback)
     repoName = os.path.basename(inputPath)
 
     if resDict:
         title = f"4.0.1 {repoName} {fileCnt} {lineCnt}"
+        if logger:
+            logger(f"결과 요약: {title}")
+
         hidx_content = title + '\n'
         for hashval, paths in resDict.items():
             hidx_content += hashval + '\t' + '\t'.join(paths) + '\n'
 
+        if logger:
+            logger("해싱 완료. hidx 생성됨.")
         return hidx_content
     else:
-        return  None
+        if logger:
+            logger("해싱 결과 없음.")
+        return None
+

@@ -1,26 +1,69 @@
-import { useState } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Box, Button, Typography, IconButton, Tabs, Tab } from "@mui/material";
 import MinimizeIcon from "@mui/icons-material/Remove";
 import MaximizeIcon from "@mui/icons-material/CheckBoxOutlineBlank";
 import CloseIcon from "@mui/icons-material/Close";
 import JSZip from "jszip";
+import io from "socket.io-client";
+import ProgressBar from "./progress-bar/ProgressBar";
 
-function App() {
-  const [message, setMessage] = useState("");
-  const [savedPath, setSavedPath] = useState("");
+import hatbom_logo_crimson from "./assets/hatbom_logo_crimson.png";
+
+const socket = io("http://localhost:5000");
+
+const App = () => {
+  const [hatbomMessage, setHatbomMessage] = useState("");
   const [vuddyMessage, setVuddyMessage] = useState("");
+  const [savedPath, setSavedPath] = useState("");
   const [vuddySavedPath, setVuddySavedPath] = useState("");
   const [zipPath, setZipPath] = useState("");
   const [tab, setTab] = useState(0);
+  const [logs, setLogs] = useState([]);
+  const [vuddyLogs, setVuddyLogs] = useState([]);
+  const [hatbomProgress, setHatbomProgress] = useState({
+    current: 0,
+    total: 0,
+  });
+  const [vuddyProgress, setVuddyProgress] = useState({ current: 0, total: 0 });
+  const [dragActive, setDragActive] = useState(false);
 
-  const handleTabChange = (event, newValue) => {
-    setTab(newValue);
+  const logBoxRef = useRef(null);
+
+  const scrollToBottom = useCallback(() => {
+    if (logBoxRef.current) {
+      logBoxRef.current.scrollTop = logBoxRef.current.scrollHeight;
+    }
+  }, []);
+
+  useEffect(scrollToBottom, [logs, vuddyLogs]);
+
+  useEffect(() => {
+    socket.on("hatbom_log", (msg) => setLogs((prev) => [...prev, msg]));
+    socket.on("vuddy_log", (msg) => setVuddyLogs((prev) => [...prev, msg]));
+    socket.on("hatbom_progress", setHatbomProgress);
+    socket.on("vuddy_progress", setVuddyProgress);
+    return () => {
+      socket.off("hatbom_log");
+      socket.off("vuddy_log");
+      socket.off("hatbom_progress");
+      socket.off("vuddy_progress");
+    };
+  }, []);
+
+  const tabStyle = {
+    textTransform: "none",
+    minWidth: 120,
+    fontWeight: 500,
+    margin: "0 0 10px 0",
+    bgcolor: "transparent",
+    "&:hover": { bgcolor: "rgb(230, 230, 230)" },
+    "&.Mui-selected": {
+      bgcolor: "rgb(253, 224, 212)", // ✅ 옅은 배경 강조
+      color: "black",
+    },
   };
 
-  const handleClick = async () => {
-    const folderPath = await window.electronAPI.selectFolder();
-    if (!folderPath) return;
-
+  const runHashing = useCallback(async (folderPath) => {
     const postToApi = async (endpoint) => {
       const res = await fetch(`http://localhost:5000/${endpoint}`, {
         method: "POST",
@@ -36,104 +79,94 @@ function App() {
         postToApi("vuddy_hash"),
       ]);
 
-      const extractRepoName = (hidx) => {
-        const firstLine = hidx.split("\n")[0];
-        const tokens = firstLine.trim().split(" ");
-        return tokens[1] || "result";
-      };
+      const extractRepoName = (hidx) =>
+        hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
 
-      let hatbomFileName = "",
-        vuddyFileName = "";
-      let hatbomSavedPath = "",
-        vuddySavedPath = "";
-
-      // hatbom
       if (hatbomData.hidx) {
-        setMessage(hatbomData.hidx);
-        const repoName = extractRepoName(hatbomData.hidx);
-        hatbomFileName = `hashmark_0_${repoName}.hidx`;
-        hatbomSavedPath = await window.electronAPI.saveFile(
-          hatbomFileName,
+        setHatbomMessage(hatbomData.hidx);
+        const name = extractRepoName(hatbomData.hidx);
+        const saved = await window.electronAPI.saveFile(
+          `hashmark_0_${name}.hidx`,
           hatbomData.hidx
         );
-        setSavedPath(hatbomSavedPath || "❌ 저장 실패");
+        setSavedPath(saved || "❌ 저장 실패");
       } else {
-        setMessage("❌ hatbom 서버 오류");
+        setHatbomMessage("❌ hatbom 서버 오류");
       }
 
-      // vuddy
       if (vuddyData.hidx) {
         setVuddyMessage(vuddyData.hidx);
-        const repoName = extractRepoName(vuddyData.hidx);
-        vuddyFileName = `hashmark_4_${repoName}.hidx`;
-        vuddySavedPath = await window.electronAPI.saveFile(
-          vuddyFileName,
+        const name = extractRepoName(vuddyData.hidx);
+        const saved = await window.electronAPI.saveFile(
+          `hashmark_4_${name}.hidx`,
           vuddyData.hidx
         );
-        setVuddySavedPath(vuddySavedPath || "❌ 저장 실패");
+        setVuddySavedPath(saved || "❌ 저장 실패");
       } else {
         setVuddyMessage("❌ vuddy 서버 오류");
       }
-
-      // ✅ 둘 다 성공했을 때 zip 생성
-      if (
-        hatbomData.hidx &&
-        vuddyData.hidx &&
-        hatbomSavedPath &&
-        vuddySavedPath
-      ) {
-        try {
-          const zip = new JSZip();
-          zip.file("test.hidx", hatbomData.hidx);
-          zip.file(vuddyFileName, vuddyData.hidx);
-          const zipBuffer = await zip.generateAsync({ type: "uint8array" });
-
-          const zipSavePath = await window.electronAPI.saveZipFile(
-            "hashmark_result.zip",
-            zipBuffer
-          );
-          setZipPath(zipSavePath || "❌ zip 저장 실패");
-        } catch (zipErr) {
-          setZipPath(`❌ zip 생성 실패 ${zipErr}`);
-        }
-      }
     } catch (err) {
       console.error("❌ 통신 에러:", err);
-      setMessage("❌ 요청 실패");
+      setHatbomMessage("❌ 요청 실패");
       setVuddyMessage("❌ 요청 실패");
+    }
+  }, []);
+
+  const handleDrop = async (e) => {
+    e.preventDefault();
+    setDragActive(false);
+
+    const files = e.dataTransfer.files;
+    if (files.length > 0) {
+      const file = files[0];
+      const folderPath = file.path;
+
+      if (file.type === "") {
+        runHashing(folderPath); // ✅ 바로 처리
+      }
     }
   };
 
-  const handleZipDownload = async () => {
-    if (!message || !vuddyMessage) return;
+  const handleDrag = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.type === "dragenter" || e.type === "dragover") setDragActive(true);
+    else if (e.type === "dragleave") setDragActive(false);
+  };
 
+  const handleZipDownload = useCallback(async () => {
+    if (!hatbomMessage || !vuddyMessage) return;
     const zip = new JSZip();
     const filename1 = savedPath.split(/[\\/]/).pop() || "hatbom.hidx";
     const filename2 = vuddySavedPath.split(/[\\/]/).pop() || "vuddy.hidx";
-
-    zip.file(filename1, message);
+    zip.file(filename1, hatbomMessage);
     zip.file(filename2, vuddyMessage);
-
     const zipBuffer = await zip.generateAsync({ type: "uint8array" });
-
     const savedZipPath = await window.electronAPI.saveZipFile(
       "hashmark_result.zip",
       zipBuffer
     );
-    if (savedZipPath) {
-      setZipPath(savedZipPath);
-    }
-  };
+    if (savedZipPath) setZipPath(savedZipPath);
+  }, [hatbomMessage, vuddyMessage, savedPath, vuddySavedPath]);
+
+  const currentLogs = tab === 0 ? logs : vuddyLogs;
+  const currentMessage = tab === 0 ? hatbomMessage : vuddyMessage;
+  const currentSavedPath = tab === 0 ? savedPath : vuddySavedPath;
+  const currentProgress = tab === 0 ? hatbomProgress : vuddyProgress;
 
   return (
     <Box
+      onDragEnter={handleDrag}
+      onDragOver={handleDrag}
+      onDragLeave={handleDrag}
+      onDrop={handleDrop}
       sx={{
-        width: 800,
-        height: "100vh",
-        mx: "auto",
-        overflow: "hidden",
         display: "flex",
         flexDirection: "column",
+        width: 800,
+        height: 900,
+        mx: "auto",
+        overflow: "hidden",
         bgcolor: "rgb(250, 245, 240)",
         fontFamily: "sans-serif",
       }}
@@ -142,16 +175,14 @@ function App() {
       <Box
         sx={{
           height: 32,
-          bgcolor: "rgb(250, 245, 240)",
-          color: "black",
           px: 2,
           display: "flex",
           alignItems: "center",
-          justifyContent: "space-between",
+          justifyContent: "flex-end",
           WebkitAppRegion: "drag",
+          flexShrink: 0,
         }}
       >
-        <Typography variant="body2">📦 Hmark</Typography>
         <Box sx={{ display: "flex", gap: 1, WebkitAppRegion: "no-drag" }}>
           <IconButton
             size="small"
@@ -171,27 +202,90 @@ function App() {
         </Box>
       </Box>
 
+      {/* Title Section */}
+      <Box
+        sx={{
+          flexShrink: 0,
+          py: 0, // ✅ 여백 제거
+          textAlign: "center",
+          backgroundColor: "rgb(247, 243, 236)",
+          mb: 0,
+        }}
+      >
+        <Box
+          component="img"
+          src={hatbom_logo_crimson}
+          alt="HatBOM Logo"
+          sx={{
+            width: 144,
+            objectFit: "contain",
+            aspectRatio: "1.24",
+            mb: 0, // ✅ 하단 마진 제거
+          }}
+        />
+      </Box>
+
       {/* 본문 */}
-      <Box sx={{ p: 3, flex: 1 }}>
-        <Typography variant="h6" gutterBottom>
-          📂 폴더 파일 목록 저장기
-        </Typography>
-        <Button variant="contained" onClick={handleClick}>
-          폴더 선택
-        </Button>
+      <Box
+        sx={{
+          flex: 1,
+          p: 3,
+          overflow: "hidden",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        {/* 드래그앤드롭 영역 */}
+        <Box
+          sx={{
+            border: "2px dashed #aaa",
+            borderRadius: 2,
+            textAlign: "center",
+            p: 5, // ✅ 패딩
+            m: 0, // ✅ 마진
+            bgcolor: dragActive ? "#fef3c7" : "white",
+            color: "#333",
+            fontSize: 16,
+            transition: "background 0.2s",
+            cursor: "pointer",
+          }}
+        >
+          📁 소스코드 폴더를 여기로 드래그 앤 드롭하세요
+        </Box>
 
         <Tabs
           value={tab}
-          onChange={handleTabChange}
-          TabIndicatorProps={{ style: { display: "none" } }}
-          sx={{ mt: 3 }}
+          onChange={(e, newVal) => setTab(newVal)}
+          slotProps={{
+            indicator: {
+              sx: {
+                backgroundColor: "rgb(189, 76, 42)", // 원하는 색상
+                height: 3,
+                borderRadius: 2,
+              },
+            },
+          }}
+          sx={{
+            mt: 1,
+            borderBottom: "none", // ✅ 하단 선 제거
+            boxShadow: "none", // ✅ 그림자 제거
+            outline: "none", // ✅ 포커스 아웃라인 제거 (선택)
+          }}
         >
           <Tab label="Hatbom 결과" sx={tabStyle} />
           <Tab label="Vuddy 결과" sx={tabStyle} />
         </Tabs>
 
+        <ProgressBar
+          current={currentProgress.current}
+          total={currentProgress.total}
+        />
+
+        {/* 로그 영역 */}
         <Box
+          ref={logBoxRef}
           sx={{
+            height: "300px",
             mt: 1,
             p: 2,
             backgroundColor: "rgb(240, 240, 240)",
@@ -200,28 +294,26 @@ function App() {
             fontSize: 13,
             whiteSpace: "pre-wrap",
             wordBreak: "break-all",
-            height: 300,
             overflowY: "auto",
           }}
         >
-          {tab === 0 ? message : vuddyMessage}
+          {currentLogs.join("\n")}
         </Box>
 
         <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
           📁 저장 위치: <br />
-          <code>{tab === 0 ? savedPath : vuddySavedPath}</code>
+          <code>{currentSavedPath}</code>
         </Typography>
 
-        {/* zip 다운로드 버튼 */}
-        {message && vuddyMessage && (
+        {hatbomMessage && vuddyMessage && (
           <Box sx={{ mt: 2 }}>
-            <Button variant="outlined" onClick={() => handleZipDownload()}>
+            <Button variant="outlined" onClick={handleZipDownload}>
               ZIP 다운로드
             </Button>
             {zipPath && (
               <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
                 🗜️ 저장된 ZIP 경로: <br />
-                <code>{zipPath}</code>캬ㅔ
+                <code>{zipPath}</code>
               </Typography>
             )}
           </Box>
@@ -229,20 +321,6 @@ function App() {
       </Box>
     </Box>
   );
-}
-
-const tabStyle = {
-  textTransform: "none",
-  minWidth: 120,
-  fontWeight: 500,
-  bgcolor: "transparent",
-  "&:hover": {
-    bgcolor: "rgb(230, 230, 230)",
-  },
-  "&.Mui-selected": {
-    bgcolor: "transparent",
-    color: "black",
-  },
 };
 
 export default App;
