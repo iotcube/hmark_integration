@@ -59,12 +59,12 @@ function createWindow() {
   });
 
   // 🔐 배포 모드: 한글 경로 대응 안전 로딩
-  const indexPath = path.resolve(__dirname, "../frontend/dist/index.html");
-  const indexURL = pathToFileURL(indexPath).href;
-  win.loadURL(indexURL);
+  // const indexPath = path.resolve(__dirname, "../frontend/dist/index.html"); // 배포할때
+  // const indexURL = pathToFileURL(indexPath).href;
+  // win.loadURL(indexURL);
 
   // 개발 서버용: 필요 시
-  // win.loadURL("http://localhost:5173");
+  win.loadURL("http://localhost:5173");
 }
 
 // 🐍 Flask 백엔드 실행

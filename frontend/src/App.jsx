@@ -252,7 +252,7 @@ const App = () => {
           }}
           onClick={() => fileInputRef.current?.click()} // ✅ 클릭 시 input 클릭
         >
-          📁 소스코드 폴더를 여기로 드래그 앤 드롭하거나 클릭해서 선택하세요
+          📁 Drag & Drop your Source Code Folder here, or click to select floder
         </Box>
         <input
           type="file"
@@ -313,22 +313,20 @@ const App = () => {
           {currentLogs.join("\n")}
         </Box>
         <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
-          📁 저장 위치: <br />
+          📁 Save File Path: <br />
           <code>{currentSavedPath}</code>
         </Typography>
-        {hatbomMessage && vuddyMessage && (
-          <Box sx={{ mt: 2 }}>
-            <Button variant="outlined" onClick={handleZipDownload}>
-              ZIP 다운로드
-            </Button>
-            {zipPath && (
-              <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
-                🗜️ 저장된 ZIP 경로: <br />
-                <code>{zipPath}</code>
-              </Typography>
-            )}
-          </Box>
-        )}
+        <Box sx={{ mt: 2 }}>
+          <Button variant="outlined" onClick={handleZipDownload}>
+            ZIP Download
+          </Button>
+          {zipPath && (
+            <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
+              🗜️ Saved ZIP Path: <br />
+              <code>{zipPath}</code>
+            </Typography>
+          )}
+        </Box>
       </Box>
     </Box>
   );
