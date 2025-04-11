@@ -28,6 +28,7 @@ const App = () => {
   const [dragActive, setDragActive] = useState(false);
 
   const logBoxRef = useRef(null);
+  const fileInputRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
     if (logBoxRef.current) {
@@ -53,8 +54,8 @@ const App = () => {
   const tabStyle = {
     textTransform: "none",
     minWidth: 120,
-    fontWeight: 500,
-    margin: "0 0 10px 0",
+    fontWeight: "bold",
+    padding: 0,
     bgcolor: "transparent",
     "&:hover": { bgcolor: "rgb(230, 230, 230)" },
     "&.Mui-selected": {
@@ -163,7 +164,7 @@ const App = () => {
       sx={{
         display: "flex",
         flexDirection: "column",
-        width: 800,
+        width: 700,
         height: 900,
         mx: "auto",
         overflow: "hidden",
@@ -241,18 +242,32 @@ const App = () => {
             border: "2px dashed #aaa",
             borderRadius: 2,
             textAlign: "center",
-            p: 5, // ✅ 패딩
-            m: 0, // ✅ 마진
+            p: 5,
+            m: 0,
             bgcolor: dragActive ? "#fef3c7" : "white",
             color: "#333",
             fontSize: 16,
             transition: "background 0.2s",
             cursor: "pointer",
           }}
+          onClick={() => fileInputRef.current?.click()} // ✅ 클릭 시 input 클릭
         >
-          📁 소스코드 폴더를 여기로 드래그 앤 드롭하세요
+          📁 소스코드 폴더를 여기로 드래그 앤 드롭하거나 클릭해서 선택하세요
         </Box>
-
+        <input
+          type="file"
+          ref={fileInputRef}
+          webkitdirectory="true" // ✅ 폴더 선택 가능
+          style={{ display: "none" }}
+          onChange={(e) => {
+            const files = e.target.files;
+            if (files.length > 0) {
+              const folderPath = files[0].path;
+              runHashing(folderPath);
+              e.target.value = ""; // 같은 폴더 재선택 가능하도록 초기화
+            }
+          }}
+        />
         <Tabs
           value={tab}
           onChange={(e, newVal) => setTab(newVal)}
@@ -275,12 +290,10 @@ const App = () => {
           <Tab label="Hatbom 결과" sx={tabStyle} />
           <Tab label="Vuddy 결과" sx={tabStyle} />
         </Tabs>
-
         <ProgressBar
           current={currentProgress.current}
           total={currentProgress.total}
         />
-
         {/* 로그 영역 */}
         <Box
           ref={logBoxRef}
@@ -299,12 +312,10 @@ const App = () => {
         >
           {currentLogs.join("\n")}
         </Box>
-
         <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
           📁 저장 위치: <br />
           <code>{currentSavedPath}</code>
         </Typography>
-
         {hatbomMessage && vuddyMessage && (
           <Box sx={{ mt: 2 }}>
             <Button variant="outlined" onClick={handleZipDownload}>

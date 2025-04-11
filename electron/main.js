@@ -1,33 +1,34 @@
 const { app, BrowserWindow, ipcMain, dialog } = require("electron");
 const path = require("path");
-const { spawn } = require("child_process");
-const os = require("os");
 const fs = require("fs");
+const os = require("os");
+const { spawn } = require("child_process");
+const { pathToFileURL } = require("url");
 
 // ✨ GPU 충돌 방지
 app.disableHardwareAcceleration();
 
+// 📁 폴더 선택
 ipcMain.handle("select-folder", async () => {
   const result = await dialog.showOpenDialog({
     properties: ["openDirectory"],
   });
-  if (result.canceled) return null;
-  return result.filePaths[0];
+  return result.canceled ? null : result.filePaths[0];
 });
 
-// 현재 실행 파일이 있는 디렉토리 기준 저장
+// 📄 파일 저장
 ipcMain.handle("save-file", async (event, filename, content) => {
   try {
-    const savePath = path.join(process.cwd(), filename); // 현재 경로에 저장
+    const savePath = path.resolve(process.cwd(), filename); // 절대경로 보장
     fs.writeFileSync(savePath, content, "utf-8");
     return savePath;
   } catch (e) {
+    console.error("파일 저장 실패:", e);
     return null;
   }
 });
 
-let flaskProcess = null;
-
+// 🔧 창 조작 이벤트
 ipcMain.on("window-minimize", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.minimize();
@@ -35,9 +36,7 @@ ipcMain.on("window-minimize", () => {
 
 ipcMain.on("window-maximize", () => {
   const win = BrowserWindow.getFocusedWindow();
-  if (win) {
-    win.isMaximized() ? win.unmaximize() : win.maximize();
-  }
+  if (win) win.isMaximized() ? win.unmaximize() : win.maximize();
 });
 
 ipcMain.on("window-close", () => {
@@ -45,44 +44,41 @@ ipcMain.on("window-close", () => {
   if (win) win.close();
 });
 
+// 🪟 브라우저 윈도우 생성
 function createWindow() {
-  // const win = new BrowserWindow({
-  //   width: 800,
-  //   height: 600,
-  //   webPreferences: {
-  //     preload: path.join(__dirname, "preload.js"),
-  //     contextIsolation: true,
-  //   },
-  // });
-
   const win = new BrowserWindow({
-    width: 800,
+    width: 700,
     height: 900,
     frame: false,
     hasShadow: false,
     resizable: false,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.resolve(__dirname, "preload.js"),
       contextIsolation: true,
     },
   });
 
-  win.loadFile(path.join(__dirname, "../frontend/dist/index.html")); //실제 배포 시
-  // win.loadFile(path.join(__dirname, "http://localhost:5173")); // 개발 핫리로드 작동 시
+  // 🔐 배포 모드: 한글 경로 대응 안전 로딩
+  const indexPath = path.resolve(__dirname, "../frontend/dist/index.html");
+  const indexURL = pathToFileURL(indexPath).href;
+  win.loadURL(indexURL);
+
+  // 개발 서버용: 필요 시
+  // win.loadURL("http://localhost:5173");
 }
 
-app.whenReady().then(() => {
-  // 가상환경의 Python 경로 설정
-  const backendPath = path.join(__dirname, "../backend");
-  const scriptPath = path.join(backendPath, "app.py");
+// 🐍 Flask 백엔드 실행
+let flaskProcess = null;
 
-  // OS에 따라 가상환경의 python 경로 다르게 설정
+app.whenReady().then(() => {
+  const backendPath = path.resolve(__dirname, "../backend");
+  const scriptPath = path.resolve(backendPath, "app.py");
+
   const venvPython =
     os.platform() === "win32"
-      ? path.join(backendPath, "venv", "Scripts", "python.exe") // Windows
-      : path.join(backendPath, "venv", "bin", "python"); // macOS/Linux
+      ? path.resolve(backendPath, "venv/Scripts/python.exe")
+      : path.resolve(backendPath, "venv/bin/python");
 
-  // Flask 서버 실행
   flaskProcess = spawn(venvPython, [scriptPath]);
 
   flaskProcess.stdout.on("data", (data) => {
@@ -94,11 +90,12 @@ app.whenReady().then(() => {
     if (text.includes("Traceback") || text.includes("Error")) {
       console.error(`[Flask ERROR] ${text}`);
     } else {
-      console.log(`[Flask ACCESS LOG] : `, JSON.stringify(text, 2, null)); // ← 여기로 보냄
+      console.log(`[Flask LOG]`, text);
     }
   });
+
   flaskProcess.on("error", (err) => {
-    console.error("Failed to start Flask process:", err);
+    console.error("Flask 실행 실패:", err);
   });
 
   createWindow();
