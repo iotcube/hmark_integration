@@ -27,6 +27,9 @@ const App = () => {
   const [vuddyProgress, setVuddyProgress] = useState({ current: 0, total: 0 });
   const [dragActive, setDragActive] = useState(false);
 
+  const [hatbomInProgress, setHatbomInProgress] = useState(false);
+  const [vuddyInProgress, setVuddyInProgress] = useState(false);
+
   const logBoxRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -65,6 +68,9 @@ const App = () => {
   };
 
   const runHashing = useCallback(async (folderPath) => {
+    setHatbomInProgress(true);
+    setVuddyInProgress(true);
+
     const postToApi = async (endpoint) => {
       const res = await fetch(`http://localhost:5000/${endpoint}`, {
         method: "POST",
@@ -74,12 +80,9 @@ const App = () => {
       return res.json();
     };
 
+    // ✅ Hatbom 해싱 먼저 처리
     try {
-      const [hatbomData, vuddyData] = await Promise.all([
-        postToApi("hatbom_hash"),
-        postToApi("vuddy_hash"),
-      ]);
-
+      const hatbomData = await postToApi("hatbom_hash");
       const extractRepoName = (hidx) =>
         hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
 
@@ -94,6 +97,18 @@ const App = () => {
       } else {
         setHatbomMessage("❌ hatbom 서버 오류");
       }
+    } catch (err) {
+      console.error("❌ hatbom 통신 에러:", err);
+      setHatbomMessage("❌ 요청 실패");
+    } finally {
+      setHatbomInProgress(false);
+    }
+
+    // ✅ Vuddy 해싱 다음 처리
+    try {
+      const vuddyData = await postToApi("vuddy_hash");
+      const extractRepoName = (hidx) =>
+        hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
 
       if (vuddyData.hidx) {
         setVuddyMessage(vuddyData.hidx);
@@ -107,9 +122,10 @@ const App = () => {
         setVuddyMessage("❌ vuddy 서버 오류");
       }
     } catch (err) {
-      console.error("❌ 통신 에러:", err);
-      setHatbomMessage("❌ 요청 실패");
+      console.error("❌ vuddy 통신 에러:", err);
       setVuddyMessage("❌ 요청 실패");
+    } finally {
+      setVuddyInProgress(false);
     }
   }, []);
 
@@ -262,7 +278,7 @@ const App = () => {
           onChange={(e) => {
             const files = e.target.files;
             if (files.length > 0) {
-              const folderPath = files[0].path;
+              const folderPath = files[0].path.replace(/[\\/][^\\/]+$/, "");
               runHashing(folderPath);
               e.target.value = ""; // 같은 폴더 재선택 가능하도록 초기화
             }
@@ -287,8 +303,40 @@ const App = () => {
             outline: "none", // ✅ 포커스 아웃라인 제거 (선택)
           }}
         >
-          <Tab label="Hatbom 결과" sx={tabStyle} />
-          <Tab label="Vuddy 결과" sx={tabStyle} />
+          <Tab
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                Hatbom 결과
+                {hatbomInProgress ? (
+                  <Typography fontSize={11} color="orange">
+                    진행중...
+                  </Typography>
+                ) : hatbomMessage ? (
+                  <Typography fontSize={11} color="green">
+                    완료
+                  </Typography>
+                ) : null}
+              </Box>
+            }
+            sx={tabStyle}
+          />
+          <Tab
+            label={
+              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
+                Vuddy 결과
+                {vuddyInProgress ? (
+                  <Typography fontSize={11} color="orange">
+                    진행중...
+                  </Typography>
+                ) : vuddyMessage ? (
+                  <Typography fontSize={11} color="green">
+                    완료
+                  </Typography>
+                ) : null}
+              </Box>
+            }
+            sx={tabStyle}
+          />
         </Tabs>
         <ProgressBar
           current={currentProgress.current}

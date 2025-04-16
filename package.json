@@ -12,6 +12,12 @@
   },
   "build": {
     "appId": "com.example.app",
+    "directories": {
+      "buildResources": "public/icons"
+    },
+    "win": {
+      "icon": "icon.ico"
+    },
     "files": [
       "electron/**/*",
       "frontend/dist/**/*",

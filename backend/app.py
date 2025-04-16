@@ -4,8 +4,11 @@ from hatbom_hashing import hatbom_hasing_main
 from vuddy_hashing import vuddy_hashing
 import traceback
 
+from flask_cors import CORS
+
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins="*")
+socketio = SocketIO(app, cors_allowed_origins=["http://localhost:5173"])
+CORS(app, origins=["http://localhost:5173"])
 
 @socketio.on("connect")
 def handle_connect(auth):

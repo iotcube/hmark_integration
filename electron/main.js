@@ -16,6 +16,15 @@ ipcMain.handle("select-folder", async () => {
   return result.canceled ? null : result.filePaths[0];
 });
 
+// 리스타트
+ipcMain.on("restart-app", () => {
+  if (flaskProcess) {
+    flaskProcess.kill(); // 🔥 Flask 먼저 종료
+  }
+  app.relaunch();
+  app.exit(0);
+});
+
 // 📄 파일 저장
 ipcMain.handle("save-file", async (event, filename, content) => {
   try {
@@ -44,7 +53,7 @@ ipcMain.on("window-close", () => {
   if (win) win.close();
 });
 
-// 🪟 브라우저 윈도우 생성
+// 브라우저 윈도우 생성
 function createWindow() {
   const win = new BrowserWindow({
     width: 700,
@@ -52,6 +61,7 @@ function createWindow() {
     frame: false,
     hasShadow: false,
     resizable: false,
+    icon: path.resolve(__dirname, "../public/icons/icon.ico"),
     webPreferences: {
       preload: path.resolve(__dirname, "preload.js"),
       contextIsolation: true,

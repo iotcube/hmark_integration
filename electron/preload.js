@@ -9,4 +9,5 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("save-file", filename, content),
   saveZipFile: (defaultName, buffer) =>
     ipcRenderer.invoke("save-zip-file", defaultName, buffer),
+  restartApp: () => ipcRenderer.send("restart-app"),
 });
