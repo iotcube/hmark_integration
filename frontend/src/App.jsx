@@ -9,7 +9,9 @@ import ProgressBar from "./progress-bar/ProgressBar";
 
 import hatbom_logo_crimson from "./assets/hatbom_logo_crimson.png";
 
-const socket = io("http://localhost:5000");
+const socket = io("http://localhost:5000", {
+  transports: ["websocket", "polling"],
+});
 
 const App = () => {
   const [hatbomMessage, setHatbomMessage] = useState("");
@@ -67,7 +69,7 @@ const App = () => {
     },
   };
 
-  const runHashing = useCallback(async (folderPath) => {
+  const runHashing = useCallback((folderPath) => {
     setHatbomInProgress(true);
     setVuddyInProgress(true);
 
@@ -80,53 +82,54 @@ const App = () => {
       return res.json();
     };
 
-    // ✅ Hatbom 해싱 먼저 처리
-    try {
-      const hatbomData = await postToApi("hatbom_hash");
-      const extractRepoName = (hidx) =>
-        hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
+    const extractRepoName = (hidx) =>
+      hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
 
-      if (hatbomData.hidx) {
-        setHatbomMessage(hatbomData.hidx);
-        const name = extractRepoName(hatbomData.hidx);
-        const saved = await window.electronAPI.saveFile(
-          `hashmark_0_${name}.hidx`,
-          hatbomData.hidx
-        );
-        setSavedPath(saved || "❌ 저장 실패");
-      } else {
-        setHatbomMessage("❌ hatbom 서버 오류");
-      }
-    } catch (err) {
-      console.error("❌ hatbom 통신 에러:", err);
-      setHatbomMessage("❌ 요청 실패");
-    } finally {
-      setHatbomInProgress(false);
-    }
+    // Hatbom 처리
+    postToApi("hatbom_hash")
+      .then(async (hatbomData) => {
+        if (hatbomData.hidx) {
+          setHatbomMessage(hatbomData.hidx);
+          const name = extractRepoName(hatbomData.hidx);
+          const saved = await window.electronAPI.saveFile(
+            `hashmark_0_${name}.hidx`,
+            hatbomData.hidx
+          );
+          setSavedPath(saved || "❌ 저장 실패");
+        } else {
+          setHatbomMessage("❌ hatbom 서버 오류");
+        }
+      })
+      .catch((err) => {
+        console.error("❌ hatbom 통신 에러:", err);
+        setHatbomMessage("❌ 요청 실패");
+      })
+      .finally(() => {
+        setHatbomInProgress(false);
+      });
 
-    // ✅ Vuddy 해싱 다음 처리
-    try {
-      const vuddyData = await postToApi("vuddy_hash");
-      const extractRepoName = (hidx) =>
-        hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
-
-      if (vuddyData.hidx) {
-        setVuddyMessage(vuddyData.hidx);
-        const name = extractRepoName(vuddyData.hidx);
-        const saved = await window.electronAPI.saveFile(
-          `hashmark_4_${name}.hidx`,
-          vuddyData.hidx
-        );
-        setVuddySavedPath(saved || "❌ 저장 실패");
-      } else {
-        setVuddyMessage("❌ vuddy 서버 오류");
-      }
-    } catch (err) {
-      console.error("❌ vuddy 통신 에러:", err);
-      setVuddyMessage("❌ 요청 실패");
-    } finally {
-      setVuddyInProgress(false);
-    }
+    // Vuddy 처리
+    postToApi("vuddy_hash")
+      .then(async (vuddyData) => {
+        if (vuddyData.hidx) {
+          setVuddyMessage(vuddyData.hidx);
+          const name = extractRepoName(vuddyData.hidx);
+          const saved = await window.electronAPI.saveFile(
+            `hashmark_4_${name}.hidx`,
+            vuddyData.hidx
+          );
+          setVuddySavedPath(saved || "❌ 저장 실패");
+        } else {
+          setVuddyMessage("❌ vuddy 서버 오류");
+        }
+      })
+      .catch((err) => {
+        console.error("❌ vuddy 통신 에러:", err);
+        setVuddyMessage("❌ 요청 실패");
+      })
+      .finally(() => {
+        setVuddyInProgress(false);
+      });
   }, []);
 
   const handleDrop = async (e) => {
@@ -139,7 +142,7 @@ const App = () => {
       const folderPath = file.path;
 
       if (file.type === "") {
-        runHashing(folderPath); // ✅ 바로 처리
+        runHashing(folderPath);
       }
     }
   };

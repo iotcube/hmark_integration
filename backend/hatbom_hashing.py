@@ -112,6 +112,9 @@ def hatbom_hasing_main(inputPath, logger=None, progress_callback=None):
     warnings.filterwarnings("ignore", category=SyntaxWarning)
     inputPath = inputPath.replace("\\", "/")
 
+    if not os.path.isdir(inputPath):
+        inputPath = os.path.dirname(inputPath)
+
     resDict, fileCnt, lineCnt = hashingFile(inputPath, logger=logger, progress_callback=progress_callback)
     repoName = os.path.basename(inputPath)
 

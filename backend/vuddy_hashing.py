@@ -48,6 +48,9 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
     absLevel = 4 if isAbstraction.lower() == "on" else 0
     directory = os.path.normpath(directory)
 
+    if not os.path.isdir(directory):
+        directory = os.path.dirname(directory)
+
     proj = os.path.basename(directory)
     if logger:
         logger(f"분석 시작: {proj} (추상화 level {absLevel})")

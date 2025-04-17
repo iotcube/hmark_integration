@@ -7,8 +7,14 @@ import traceback
 from flask_cors import CORS
 
 app = Flask(__name__)
-socketio = SocketIO(app, cors_allowed_origins=["http://localhost:5173"])
-CORS(app, origins=["http://localhost:5173"])
+socketio = SocketIO(
+    app,
+    cors_allowed_origins="*",           # CORS 허용
+    async_mode="threading",             # threading 모드 유지
+    logger=True,
+    engineio_logger=True,
+)
+CORS(app, origins="*")
 
 @socketio.on("connect")
 def handle_connect(auth):
@@ -76,5 +82,8 @@ def vuddy_hash():
         return jsonify({"error": str(e)}), 500
 
 
-if __name__ == "__main__":
+def main():
     socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
+
+if __name__ == "__main__":
+    main()

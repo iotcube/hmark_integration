@@ -8,6 +8,13 @@ const { pathToFileURL } = require("url");
 // ✨ GPU 충돌 방지
 app.disableHardwareAcceleration();
 
+// 📝 로그 파일 설정
+const logFilePath = path.join(app.getPath("userData"), "hmark-log.txt");
+function logToFile(message) {
+  const timestamp = new Date().toISOString();
+  fs.appendFileSync(logFilePath, `[${timestamp}] ${message}\n`);
+}
+
 // 📁 폴더 선택
 ipcMain.handle("select-folder", async () => {
   const result = await dialog.showOpenDialog({
@@ -28,11 +35,29 @@ ipcMain.on("restart-app", () => {
 // 📄 파일 저장
 ipcMain.handle("save-file", async (event, filename, content) => {
   try {
-    const savePath = path.resolve(process.cwd(), filename); // 절대경로 보장
+    const savePath = path.resolve(process.cwd(), filename);
     fs.writeFileSync(savePath, content, "utf-8");
     return savePath;
   } catch (e) {
     console.error("파일 저장 실패:", e);
+    logToFile(`❌ 파일 저장 실패: ${e.message}`);
+    return null;
+  }
+});
+
+// ZIP 저장
+ipcMain.handle("save-zip-file", async (event, defaultName, buffer) => {
+  try {
+    const { canceled, filePath } = await dialog.showSaveDialog({
+      defaultPath: defaultName,
+      filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+    });
+    if (canceled || !filePath) return null;
+    fs.writeFileSync(filePath, buffer);
+    return filePath;
+  } catch (e) {
+    console.error("ZIP 저장 실패:", e);
+    logToFile(`❌ ZIP 저장 실패: ${e.message}`);
     return null;
   }
 });
@@ -42,18 +67,16 @@ ipcMain.on("window-minimize", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.minimize();
 });
-
 ipcMain.on("window-maximize", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.isMaximized() ? win.unmaximize() : win.maximize();
 });
-
 ipcMain.on("window-close", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.close();
 });
 
-// 브라우저 윈도우 생성
+// 🪟 브라우저 윈도우 생성
 function createWindow() {
   const win = new BrowserWindow({
     width: 700,
@@ -68,44 +91,70 @@ function createWindow() {
     },
   });
 
-  // 🔐 배포 모드: 한글 경로 대응 안전 로딩
-  // const indexPath = path.resolve(__dirname, "../frontend/dist/index.html"); // 배포할때
-  // const indexURL = pathToFileURL(indexPath).href;
-  // win.loadURL(indexURL);
+  const indexPath = path.resolve(__dirname, "../frontend/dist/index.html");
+  const indexURL = pathToFileURL(indexPath).href;
+  win.loadURL(indexURL);
 
-  // 개발 서버용: 필요 시
-  win.loadURL("http://localhost:5173");
+  // 개발용
+  // win.loadURL("http://localhost:5173");
 }
 
 // 🐍 Flask 백엔드 실행
 let flaskProcess = null;
 
 app.whenReady().then(() => {
-  const backendPath = path.resolve(__dirname, "../backend");
-  const scriptPath = path.resolve(backendPath, "app.py");
+  const isDev = !app.isPackaged;
 
-  const venvPython =
-    os.platform() === "win32"
-      ? path.resolve(backendPath, "venv/Scripts/python.exe")
-      : path.resolve(backendPath, "venv/bin/python");
+  const backendPath = isDev
+    ? path.resolve(__dirname, "../backend/dist")
+    : path.join(process.resourcesPath, "backend/dist");
 
-  flaskProcess = spawn(venvPython, [scriptPath]);
+  const flaskExePath = path.join(
+    backendPath,
+    os.platform() === "win32" ? "flask_server.exe" : "flask_server"
+  );
+
+  console.log("🚀 실행할 Flask 경로:", flaskExePath);
+  console.log("📁 실행 디렉토리:", backendPath);
+  logToFile(`🚀 실행할 Flask 경로: ${flaskExePath}`);
+  logToFile(`📁 실행 디렉토리: ${backendPath}`);
+
+  // 파일 존재 여부 체크
+  if (!fs.existsSync(flaskExePath)) {
+    const msg = "❌ flask_server 실행파일이 존재하지 않습니다.";
+    console.error(msg);
+    logToFile(msg);
+  }
+
+  flaskProcess = spawn(flaskExePath, [], {
+    cwd: backendPath,
+  });
 
   flaskProcess.stdout.on("data", (data) => {
-    console.log(`Flask: ${data}`);
+    const text = data.toString();
+    console.log(`Flask: ${text}`);
+    logToFile(`Flask stdout: ${text}`);
   });
 
   flaskProcess.stderr.on("data", (data) => {
     const text = data.toString();
     if (text.includes("Traceback") || text.includes("Error")) {
       console.error(`[Flask ERROR] ${text}`);
+      logToFile(`[Flask ERROR] ${text}`);
     } else {
-      console.log(`[Flask LOG]`, text);
+      console.log(`[Flask LOG] ${text}`);
+      logToFile(`[Flask LOG] ${text}`);
     }
   });
 
   flaskProcess.on("error", (err) => {
     console.error("Flask 실행 실패:", err);
+    logToFile(`❌ Flask 실행 실패: ${err.message}`);
+  });
+
+  flaskProcess.on("exit", (code, signal) => {
+    console.log(`[Flask 종료됨] code: ${code}, signal: ${signal}`);
+    logToFile(`❗ Flask 종료됨 - code: ${code}, signal: ${signal}`);
   });
 
   createWindow();

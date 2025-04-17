@@ -16,17 +16,18 @@
       "buildResources": "public/icons"
     },
     "win": {
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "target": "portable"
     },
     "files": [
       "electron/**/*",
       "frontend/dist/**/*",
-      "backend/**/*"
+      "backend/dist/**/*"
     ],
     "extraResources": [
       {
-        "from": "backend",
-        "to": "backend"
+        "from": "backend/dist",
+        "to": "backend/dist"
       }
     ]
   },
