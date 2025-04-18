@@ -4,6 +4,7 @@ import time
 import platform
 import subprocess
 import json
+import re
 from hashlib import md5
 import parseutility2 as pu
 
@@ -17,6 +18,9 @@ elif osName == "darwin":
 else:
     osName = "linux"
 
+# 윈도우 불가능한 문자 제거
+def safe_filename(name):
+    return re.sub(r'[:*?"<>|]', '_', name)
 
 def parseFiles_shallow(f):
     if f[1] == "c":
@@ -30,7 +34,6 @@ def parseFiles_shallow(f):
     elif f[1] == "javascript":
         return (f[0], pu.parse_js_shallow(f[0]), f[1])
 
-
 def parseFiles_deep(f):
     if f[1] == "c":
         return (f[0], pu.parse_c_deep(f[0]), f[1])
@@ -43,7 +46,6 @@ def parseFiles_deep(f):
     elif f[1] == "javascript":
         return (f[0], pu.parse_js_deep(f[0]), f[1])
 
-
 def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=None):
     absLevel = 4 if isAbstraction.lower() == "on" else 0
     directory = os.path.normpath(directory)
@@ -52,6 +54,8 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
         directory = os.path.dirname(directory)
 
     proj = os.path.basename(directory)
+    proj = safe_filename(proj)
+
     if logger:
         logger(f"분석 시작: {proj} (추상화 level {absLevel})")
 
@@ -70,7 +74,6 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
     func = parseFiles_deep if absLevel == 4 else parseFiles_shallow
 
     for idx, tup in enumerate(tupleList):
-
         if progress_callback:
             progress_callback(current=idx + 1, total=numFile)
 
@@ -91,8 +94,35 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
 
             if funcLen > 50:
                 hashValue = md5(absBody.encode('utf-8')).hexdigest()
-                cutLength = len(str(funcInst.parentFile.split(str(proj) + "/")[0]) + str(proj) + "/")
-                rel_path = str(funcInst.parentFile[cutLength:])
+
+                parentPath = funcInst.parentFile
+                rel_path = None
+
+
+                try:
+                    cutIdx = parentPath.find(proj)
+                    if cutIdx != -1:
+                        rel_path = parentPath[cutIdx + len(proj) + 1:]
+                    else:
+                        rel_path = os.path.basename(parentPath)
+
+                    print("원본 경로:", parentPath)
+                    print("프로젝트 이름:", proj)
+                    print("rel_path:", repr(rel_path))  # repr로 줄바꿈, 특수문자 확인
+                except Exception as e:
+                    print("🔥 경로 처리 중 오류 발생:", e)
+                    raise
+
+
+                # cutIdx = parentPath.find(proj)
+                # if cutIdx != -1:
+                #     rel_path = parentPath[cutIdx + len(proj) + 1:]
+                # else:
+                #     rel_path = os.path.basename(parentPath)
+
+                # rel_path = os.path.normpath(rel_path)
+                # rel_path = safe_filename(rel_path)
+
                 listOfHashJsons.append({
                     "file": rel_path,
                     "function id": str(funcInst.funcId),
@@ -108,17 +138,10 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
 
     global title_info
     title_info = f"{localVersion} {proj} {numFile} {numFunc} {numLine}\n"
-    full_result = title_info + json.dumps(listOfHashJsons, indent=2)
+    full_result = title_info + json.dumps(listOfHashJsons, indent=2, ensure_ascii=False)
 
     if logger:
         logger("해싱 완료")
         logger(title_info.strip())
 
     return full_result
-
-
-
-# if __name__ == "__main__":
-#     target_directory = "C:/Users/연구원/Downloads/feelpp-develop"  # 대상 폴더 설정 (변경 가능)
-#     result_str = generate_hash_index(target_directory)
-#     print(title_info)  # 프로세스 빌더가 읽을 수 있도록 출력

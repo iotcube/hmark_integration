@@ -16,8 +16,7 @@
       "buildResources": "public/icons"
     },
     "win": {
-      "icon": "icon.ico",
-      "target": "portable"
+      "icon": "icon.ico"
     },
     "files": [
       "electron/**/*",

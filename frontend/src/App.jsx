@@ -9,10 +9,6 @@ import ProgressBar from "./progress-bar/ProgressBar";
 
 import hatbom_logo_crimson from "./assets/hatbom_logo_crimson.png";
 
-const socket = io("http://localhost:5000", {
-  transports: ["websocket", "polling"],
-});
-
 const App = () => {
   const [hatbomMessage, setHatbomMessage] = useState("");
   const [vuddyMessage, setVuddyMessage] = useState("");
@@ -28,10 +24,11 @@ const App = () => {
   });
   const [vuddyProgress, setVuddyProgress] = useState({ current: 0, total: 0 });
   const [dragActive, setDragActive] = useState(false);
-
   const [hatbomInProgress, setHatbomInProgress] = useState(false);
   const [vuddyInProgress, setVuddyInProgress] = useState(false);
+  const [flaskPort, setFlaskPort] = useState(5000); // 기본값
 
+  const socketRef = useRef(null);
   const logBoxRef = useRef(null);
   const fileInputRef = useRef(null);
 
@@ -44,15 +41,21 @@ const App = () => {
   useEffect(scrollToBottom, [logs, vuddyLogs]);
 
   useEffect(() => {
+    const port = window.electronAPI?.getFlaskPort?.() || 5000;
+    setFlaskPort(port);
+
+    const socket = io(`http://localhost:${port}`, {
+      transports: ["websocket", "polling"],
+    });
+    socketRef.current = socket;
+
     socket.on("hatbom_log", (msg) => setLogs((prev) => [...prev, msg]));
     socket.on("vuddy_log", (msg) => setVuddyLogs((prev) => [...prev, msg]));
     socket.on("hatbom_progress", setHatbomProgress);
     socket.on("vuddy_progress", setVuddyProgress);
+
     return () => {
-      socket.off("hatbom_log");
-      socket.off("vuddy_log");
-      socket.off("hatbom_progress");
-      socket.off("vuddy_progress");
+      socket.disconnect();
     };
   }, []);
 
@@ -64,86 +67,82 @@ const App = () => {
     bgcolor: "transparent",
     "&:hover": { bgcolor: "rgb(230, 230, 230)" },
     "&.Mui-selected": {
-      bgcolor: "rgb(253, 224, 212)", // ✅ 옅은 배경 강조
+      bgcolor: "rgb(253, 224, 212)",
       color: "black",
     },
   };
 
-  const runHashing = useCallback((folderPath) => {
-    setHatbomInProgress(true);
-    setVuddyInProgress(true);
+  const runHashing = useCallback(
+    (folderPath) => {
+      setHatbomInProgress(true);
+      setVuddyInProgress(true);
 
-    const postToApi = async (endpoint) => {
-      const res = await fetch(`http://localhost:5000/${endpoint}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folderPath }),
-      });
-      return res.json();
-    };
+      const postToApi = async (endpoint) => {
+        const res = await fetch(`http://localhost:${flaskPort}/${endpoint}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ folderPath }),
+        });
+        return res.json();
+      };
 
-    const extractRepoName = (hidx) =>
-      hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
+      const extractRepoName = (hidx) =>
+        hidx?.split("\n")[0]?.trim()?.split(" ")[1] || "result";
 
-    // Hatbom 처리
-    postToApi("hatbom_hash")
-      .then(async (hatbomData) => {
-        if (hatbomData.hidx) {
-          setHatbomMessage(hatbomData.hidx);
-          const name = extractRepoName(hatbomData.hidx);
-          const saved = await window.electronAPI.saveFile(
-            `hashmark_0_${name}.hidx`,
-            hatbomData.hidx
-          );
-          setSavedPath(saved || "❌ 저장 실패");
-        } else {
-          setHatbomMessage("❌ hatbom 서버 오류");
-        }
-      })
-      .catch((err) => {
-        console.error("❌ hatbom 통신 에러:", err);
-        setHatbomMessage("❌ 요청 실패");
-      })
-      .finally(() => {
-        setHatbomInProgress(false);
-      });
+      postToApi("hatbom_hash")
+        .then(async (hatbomData) => {
+          if (hatbomData.hidx) {
+            setHatbomMessage(hatbomData.hidx);
+            const name = extractRepoName(hatbomData.hidx);
+            const saved = await window.electronAPI.saveFile(
+              `hashmark_0_${name}.hidx`,
+              hatbomData.hidx
+            );
+            setSavedPath(saved || "❌ 저장 실패");
+          } else {
+            setHatbomMessage("❌ hatbom 서버 오류");
+          }
+        })
+        .catch((err) => {
+          console.error("❌ hatbom 통신 에러:", err);
+          setHatbomMessage("❌ 요청 실패");
+        })
+        .finally(() => {
+          setHatbomInProgress(false);
+        });
 
-    // Vuddy 처리
-    postToApi("vuddy_hash")
-      .then(async (vuddyData) => {
-        if (vuddyData.hidx) {
-          setVuddyMessage(vuddyData.hidx);
-          const name = extractRepoName(vuddyData.hidx);
-          const saved = await window.electronAPI.saveFile(
-            `hashmark_4_${name}.hidx`,
-            vuddyData.hidx
-          );
-          setVuddySavedPath(saved || "❌ 저장 실패");
-        } else {
-          setVuddyMessage("❌ vuddy 서버 오류");
-        }
-      })
-      .catch((err) => {
-        console.error("❌ vuddy 통신 에러:", err);
-        setVuddyMessage("❌ 요청 실패");
-      })
-      .finally(() => {
-        setVuddyInProgress(false);
-      });
-  }, []);
+      postToApi("vuddy_hash")
+        .then(async (vuddyData) => {
+          if (vuddyData.hidx) {
+            setVuddyMessage(vuddyData.hidx);
+            const name = extractRepoName(vuddyData.hidx);
+            const saved = await window.electronAPI.saveFile(
+              `hashmark_4_${name}.hidx`,
+              vuddyData.hidx
+            );
+            setVuddySavedPath(saved || "❌ 저장 실패");
+          } else {
+            setVuddyMessage("❌ vuddy 서버 오류");
+          }
+        })
+        .catch((err) => {
+          console.error("❌ vuddy 통신 에러:", err);
+          setVuddyMessage("❌ 요청 실패");
+        })
+        .finally(() => {
+          setVuddyInProgress(false);
+        });
+    },
+    [flaskPort]
+  );
 
   const handleDrop = async (e) => {
     e.preventDefault();
     setDragActive(false);
-
     const files = e.dataTransfer.files;
-    if (files.length > 0) {
-      const file = files[0];
-      const folderPath = file.path;
-
-      if (file.type === "") {
-        runHashing(folderPath);
-      }
+    if (files.length > 0 && files[0].type === "") {
+      const folderPath = files[0].path;
+      runHashing(folderPath);
     }
   };
 
@@ -170,7 +169,6 @@ const App = () => {
   }, [hatbomMessage, vuddyMessage, savedPath, vuddySavedPath]);
 
   const currentLogs = tab === 0 ? logs : vuddyLogs;
-  const currentMessage = tab === 0 ? hatbomMessage : vuddyMessage;
   const currentSavedPath = tab === 0 ? savedPath : vuddySavedPath;
   const currentProgress = tab === 0 ? hatbomProgress : vuddyProgress;
 
@@ -222,11 +220,11 @@ const App = () => {
         </Box>
       </Box>
 
-      {/* Title Section */}
+      {/* 타이틀 */}
       <Box
         sx={{
           flexShrink: 0,
-          py: 0, // ✅ 여백 제거
+          py: 0,
           textAlign: "center",
           backgroundColor: "rgb(247, 243, 236)",
           mb: 0,
@@ -236,12 +234,7 @@ const App = () => {
           component="img"
           src={hatbom_logo_crimson}
           alt="HatBOM Logo"
-          sx={{
-            width: 144,
-            objectFit: "contain",
-            aspectRatio: "1.24",
-            mb: 0, // ✅ 하단 마진 제거
-          }}
+          sx={{ width: 144, objectFit: "contain", aspectRatio: "1.24", mb: 0 }}
         />
       </Box>
 
@@ -255,7 +248,6 @@ const App = () => {
           flexDirection: "column",
         }}
       >
-        {/* 드래그앤드롭 영역 */}
         <Box
           sx={{
             border: "2px dashed #aaa",
@@ -269,21 +261,21 @@ const App = () => {
             transition: "background 0.2s",
             cursor: "pointer",
           }}
-          onClick={() => fileInputRef.current?.click()} // ✅ 클릭 시 input 클릭
+          onClick={() => fileInputRef.current?.click()}
         >
-          📁 Drag & Drop your Source Code Folder here, or click to select floder
+          📁 Drag & Drop your Source Code Folder here, or click to select folder
         </Box>
         <input
           type="file"
           ref={fileInputRef}
-          webkitdirectory="true" // ✅ 폴더 선택 가능
+          webkitdirectory="true"
           style={{ display: "none" }}
           onChange={(e) => {
             const files = e.target.files;
             if (files.length > 0) {
               const folderPath = files[0].path.replace(/[\\/][^\\/]+$/, "");
               runHashing(folderPath);
-              e.target.value = ""; // 같은 폴더 재선택 가능하도록 초기화
+              e.target.value = "";
             }
           }}
         />
@@ -293,7 +285,7 @@ const App = () => {
           slotProps={{
             indicator: {
               sx: {
-                backgroundColor: "rgb(189, 76, 42)", // 원하는 색상
+                backgroundColor: "rgb(189, 76, 42)",
                 height: 3,
                 borderRadius: 2,
               },
@@ -301,51 +293,18 @@ const App = () => {
           }}
           sx={{
             mt: 1,
-            borderBottom: "none", // ✅ 하단 선 제거
-            boxShadow: "none", // ✅ 그림자 제거
-            outline: "none", // ✅ 포커스 아웃라인 제거 (선택)
+            borderBottom: "none",
+            boxShadow: "none",
+            outline: "none",
           }}
         >
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                Hatbom 결과
-                {hatbomInProgress ? (
-                  <Typography fontSize={11} color="orange">
-                    진행중...
-                  </Typography>
-                ) : hatbomMessage ? (
-                  <Typography fontSize={11} color="green">
-                    완료
-                  </Typography>
-                ) : null}
-              </Box>
-            }
-            sx={tabStyle}
-          />
-          <Tab
-            label={
-              <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-                Vuddy 결과
-                {vuddyInProgress ? (
-                  <Typography fontSize={11} color="orange">
-                    진행중...
-                  </Typography>
-                ) : vuddyMessage ? (
-                  <Typography fontSize={11} color="green">
-                    완료
-                  </Typography>
-                ) : null}
-              </Box>
-            }
-            sx={tabStyle}
-          />
+          <Tab label="Hatbom 결과" sx={tabStyle} />
+          <Tab label="Vuddy 결과" sx={tabStyle} />
         </Tabs>
         <ProgressBar
           current={currentProgress.current}
           total={currentProgress.total}
         />
-        {/* 로그 영역 */}
         <Box
           ref={logBoxRef}
           sx={{

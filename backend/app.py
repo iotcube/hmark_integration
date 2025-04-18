@@ -3,8 +3,8 @@ from flask_socketio import SocketIO
 from hatbom_hashing import hatbom_hasing_main
 from vuddy_hashing import vuddy_hashing
 import traceback
-
 from flask_cors import CORS
+import argparse
 
 app = Flask(__name__)
 socketio = SocketIO(
@@ -83,7 +83,12 @@ def vuddy_hash():
 
 
 def main():
-    socketio.run(app, host="0.0.0.0", port=5000, allow_unsafe_werkzeug=True)
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--port", type=int, default=5000)
+    args = parser.parse_args()
 
+    print(f"Listening Port : {args.port}", flush=True)
+
+    socketio.run(app, host="0.0.0.0", port=args.port, allow_unsafe_werkzeug=True)
 if __name__ == "__main__":
     main()
