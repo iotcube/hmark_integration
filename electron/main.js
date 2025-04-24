@@ -73,6 +73,18 @@ ipcMain.handle("save-zip-file", async (event, defaultName, buffer) => {
   }
 });
 
+// 파일 저장 핸들러 등록
+ipcMain.handle("save-file", async (event, filename, content) => {
+  try {
+    const savePath = path.resolve(process.cwd(), filename);
+    fs.writeFileSync(savePath, content, "utf-8");
+    return savePath;
+  } catch (err) {
+    console.error("파일 저장 중 오류 발생:", err);
+    throw err;
+  }
+});
+
 ipcMain.on("window-minimize", () => {
   const win = BrowserWindow.getFocusedWindow();
   if (win) win.minimize();

@@ -224,7 +224,7 @@
  [],
  False,
  False,
- 1745389816,
+ 1745460568,
  [('run.exe',
    'C:\\Users\\연구원\\Desktop\\IoTcubeVer2\\hatbom_v2_tool\\hmark_app\\backend\\venv\\Lib\\site-packages\\PyInstaller\\bootloader\\Windows-64bit-intel\\run.exe',
    'EXECUTABLE')],
