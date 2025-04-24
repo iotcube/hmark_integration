@@ -3,7 +3,7 @@ const path = require("path");
 const fs = require("fs");
 const os = require("os");
 const net = require("net");
-const { spawn } = require("child_process");
+const { spawn, exec } = require("child_process");
 const { pathToFileURL } = require("url");
 
 app.disableHardwareAcceleration();
@@ -13,6 +13,14 @@ function logToFile(message) {
   const timestamp = new Date().toISOString();
   fs.appendFileSync(logFilePath, `[${timestamp}] ${message}\n`);
 }
+
+ipcMain.on("window-close", () => {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win) {
+    forceKillFlask();
+    win.close();
+  }
+});
 
 ipcMain.handle("select-folder", async () => {
   const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
@@ -25,7 +33,19 @@ ipcMain.on("restart-app", () => {
   app.exit(0);
 });
 
-ipcMain.handle("save-file", async (event, filename, content) => {
+ipcMain.handle("save-hatbom-file", async (event, filename, content) => {
+  try {
+    const savePath = path.resolve(process.cwd(), filename);
+    fs.writeFileSync(savePath, content, "utf-8");
+    return savePath;
+  } catch (e) {
+    console.error("파일 저장 실패:", e);
+    logToFile(`❌ 파일 저장 실패: ${e.message}`);
+    return null;
+  }
+});
+
+ipcMain.handle("save-vuddy-file", async (event, filename, content) => {
   try {
     const savePath = path.resolve(process.cwd(), filename);
     fs.writeFileSync(savePath, content, "utf-8");
@@ -66,7 +86,7 @@ ipcMain.on("window-close", () => {
   if (win) {
     if (flaskProcess) {
       flaskProcess.kill();
-      logToFile("🛑 Flask 프로세스 종료됨 (윈도우 닫힘)");
+      logToFile("Flask 프로세스 종료됨 (윈도우 닫힘)");
     }
     win.close();
   }
@@ -89,6 +109,8 @@ function createWindow() {
   const indexPath = path.resolve(__dirname, "../frontend/dist/index.html");
   const indexURL = pathToFileURL(indexPath).href;
   win.loadURL(indexURL);
+
+  // win.webContents.openDevTools();
 }
 
 let flaskProcess = null;
@@ -113,6 +135,20 @@ function findAvailablePort(start = 5000, end = 5100) {
 
     check();
   });
+}
+
+function forceKillFlask() {
+  if (process.platform === "win32") {
+    exec("taskkill /IM flask_server.exe /F", (error, stdout, stderr) => {
+      if (error) {
+        logToFile(`❌ Flask 강제종료 실패: ${error.message}`);
+      } else {
+        logToFile(`🛑 Flask 강제종료 성공`);
+      }
+    });
+  } else {
+    if (flaskProcess) flaskProcess.kill();
+  }
 }
 
 app.whenReady().then(async () => {
@@ -185,4 +221,8 @@ app.whenReady().then(async () => {
 
 app.on("will-quit", () => {
   if (flaskProcess) flaskProcess.kill();
+});
+
+app.on("before-quit", () => {
+  forceKillFlask();
 });

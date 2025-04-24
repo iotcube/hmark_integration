@@ -162,7 +162,7 @@ const App = () => {
     zip.file(filename2, vuddyMessage);
     const zipBuffer = await zip.generateAsync({ type: "uint8array" });
     const savedZipPath = await window.electronAPI.saveZipFile(
-      "hashmark_result.zip",
+      "hmark_result.zip",
       zipBuffer
     );
     if (savedZipPath) setZipPath(savedZipPath);

@@ -16,7 +16,7 @@ if errorlevel 1 (
 )
 
 cd backend
-pyinstaller --onefile --name flask_server --hidden-import engineio.async_drivers.threading app.py
+pyinstaller --onefile --name flask_server --hidden-import engineio.async_drivers.threading --add-binary "ctags.exe;." app.py
 if errorlevel 1 (
   echo ❌ flask_server 빌드 실패
   cd ..

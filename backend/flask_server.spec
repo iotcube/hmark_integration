@@ -4,7 +4,7 @@
 a = Analysis(
     ['app.py'],
     pathex=[],
-    binaries=[],
+    binaries=[('ctags.exe', '.')],
     datas=[],
     hiddenimports=['engineio.async_drivers.threading'],
     hookspath=[],
