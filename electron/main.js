@@ -64,151 +64,206 @@ function findAvailablePort(start = 5000, end = 5100) {
     let port = start;
 
     const check = () => {
-      if (port > end) return reject(new Error("사용 가능한 포트 없음"));
+      if (port > end) {
+        console.error("사용 가능한 포트가 없습니다.");
+        logToFile("사용 가능한 포트가 없습니다.");
+        return reject(new Error("사용 가능한 포트 없음"));
+      }
 
-      const server = net.createServer();
-      server.once("error", () => {
+      // IPv4와 IPv6 서버 생성
+      const server4 = net.createServer();
+      const server6 = net.createServer();
+
+      let ipv4Open = false;
+      let ipv6Open = false;
+
+      const onError = (err) => {
+        if (err.code === "EADDRINUSE") {
+          console.warn(`포트 ${port} 사용 중`);
+          logToFile(`포트 ${port} 사용 중`);
+        }
+        server4.close();
+        server6.close();
         port++;
         check();
-      });
-      server.once("listening", () => {
-        server.close(() => resolve(port));
-      });
-      server.listen(port, "127.0.0.1");
+      };
+
+      const onListening = (serverType) => {
+        if (serverType === "ipv4") {
+          ipv4Open = true;
+        } else if (serverType === "ipv6") {
+          ipv6Open = true;
+        }
+
+        // 두 인터페이스가 모두 열린 경우에만 사용 가능으로 판단
+        if (ipv4Open && ipv6Open) {
+          server4.close();
+          server6.close();
+          console.log(`사용 가능한 포트 발견: ${port}`);
+          logToFile(`사용 가능한 포트 발견: ${port}`);
+          resolve(port);
+        }
+      };
+
+      server4.once("error", onError);
+      server6.once("error", onError);
+      server4.once("listening", () => onListening("ipv4"));
+      server6.once("listening", () => onListening("ipv6"));
+
+      // IPv4 & IPv6 모두 체크
+      server4.listen(port, "0.0.0.0");
+      server6.listen(port, "::1");
     };
 
     check();
   });
 }
 
-// Flask 실행
-app.whenReady().then(async () => {
-  const isDev = !app.isPackaged;
+const gotTheLock = app.requestSingleInstanceLock();
 
-  const backendPath = isDev
-    ? path.resolve(__dirname, "../backend/dist")
-    : path.join(process.resourcesPath, "backend/dist");
+if (!gotTheLock) {
+  console.log("⚠️ 다른 인스턴스가 이미 실행 중입니다. 종료합니다.");
+  app.quit();
+} else {
+  app.on("second-instance", (event, commandLine, workingDirectory) => {
+    if (BrowserWindow.getAllWindows().length > 0) {
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.focus();
+    }
+  });
 
-  const flaskExePath = path.join(
-    backendPath,
-    os.platform() === "win32" ? "flask_server.exe" : "flask_server"
-  );
+  // Flask 실행
+  app.whenReady().then(async () => {
+    const isDev = !app.isPackaged;
 
-  console.log("실행할 Flask 경로:", flaskExePath);
-  console.log("실행 디렉토리:", backendPath);
-  logToFile(`실행할 Flask 경로: ${flaskExePath}`);
-  logToFile(`실행 디렉토리: ${backendPath}`);
+    const backendPath = isDev
+      ? path.resolve(__dirname, "../backend/dist")
+      : path.join(process.resourcesPath, "backend/dist");
 
-  if (!fs.existsSync(flaskExePath)) {
-    const msg = "flask_server 실행파일이 존재하지 않습니다.";
-    console.error(msg);
-    logToFile(msg);
-    return;
-  }
+    const flaskExePath = path.join(
+      backendPath,
+      os.platform() === "win32" ? "flask_server.exe" : "flask_server"
+    );
 
-  try {
-    const flaskPort = await findAvailablePort(5000, 5100);
-    global.sharedFlaskPort = flaskPort;
-    logToFile(`Flask 실행 포트: ${flaskPort}`);
+    console.log("실행할 Flask 경로:", flaskExePath);
+    console.log("실행 디렉토리:", backendPath);
+    logToFile(`실행할 Flask 경로: ${flaskExePath}`);
+    logToFile(`실행 디렉토리: ${backendPath}`);
 
-    flaskProcess = spawn(flaskExePath, ["--port", flaskPort.toString()], {
-      cwd: backendPath,
+    if (!fs.existsSync(flaskExePath)) {
+      const msg = "flask_server 실행파일이 존재하지 않습니다.";
+      console.error(msg);
+      logToFile(msg);
+      return;
+    }
+
+    try {
+      const flaskPort = await findAvailablePort(5000, 5100);
+      global.sharedFlaskPort = flaskPort;
+      logToFile(`Flask 실행 포트: ${flaskPort}`);
+
+      flaskProcess = spawn(flaskExePath, ["--port", flaskPort.toString()], {
+        cwd: backendPath,
+      });
+
+      flaskProcess.stdout.on("data", (data) => {
+        const text = data.toString();
+        console.log(`Flask: ${text}`);
+        logToFile(`Flask stdout: ${text}`);
+      });
+
+      flaskProcess.stderr.on("data", (data) => {
+        const text = data.toString();
+        if (text.includes("Traceback") || text.includes("Error")) {
+          console.error(`[Flask ERROR] ${text}`);
+          logToFile(`[Flask ERROR] ${text}`);
+        } else {
+          console.log(`[Flask LOG] ${text}`);
+          logToFile(`[Flask LOG] ${text}`);
+        }
+      });
+
+      flaskProcess.on("error", (err) => {
+        console.error("Flask 실행 실패:", err);
+        logToFile(`Flask 실행 실패: ${err.message}`);
+      });
+
+      flaskProcess.on("exit", (code, signal) => {
+        console.log(`[Flask 종료됨] code: ${code}, signal: ${signal}`);
+        logToFile(` Flask 종료됨 - code: ${code}, signal: ${signal}`);
+      });
+    } catch (err) {
+      console.error("포트 탐색 실패:", err);
+      logToFile(`포트 탐색 실패: ${err.message}`);
+      return;
+    }
+
+    createWindow();
+  });
+
+  // 종료 이벤트 처리
+  app.on("before-quit", () => safeKillFlask("before-quit"));
+  app.on("will-quit", () => safeKillFlask("will-quit"));
+  process.on("SIGINT", () => safeKillFlask("SIGINT"));
+  process.on("SIGTERM", () => safeKillFlask("SIGTERM"));
+
+  // 창 컨트롤
+  ipcMain.on("window-close", () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) {
+      safeKillFlask("window-close");
+      win.close();
+    }
+  });
+  ipcMain.on("window-minimize", () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.minimize();
+  });
+  ipcMain.on("window-maximize", () => {
+    const win = BrowserWindow.getFocusedWindow();
+    if (win) win.isMaximized() ? win.unmaximize() : win.maximize();
+  });
+  ipcMain.on("restart-app", () => {
+    safeKillFlask("restart-app");
+    app.relaunch();
+    app.exit(0);
+  });
+
+  // 폴더 선택
+  ipcMain.handle("select-folder", async () => {
+    const result = await dialog.showOpenDialog({
+      properties: ["openDirectory"],
     });
+    return result.canceled ? null : result.filePaths[0];
+  });
 
-    flaskProcess.stdout.on("data", (data) => {
-      const text = data.toString();
-      console.log(`Flask: ${text}`);
-      logToFile(`Flask stdout: ${text}`);
-    });
+  // 파일 저장 핸들러
+  ipcMain.handle("save-file", async (event, filename, content) => {
+    try {
+      const savePath = path.resolve(process.cwd(), filename);
+      fs.writeFileSync(savePath, content, "utf-8");
+      return savePath;
+    } catch (err) {
+      console.error("파일 저장 중 오류 발생:", err);
+      logToFile(`파일 저장 실패: ${err.message}`);
+      return null;
+    }
+  });
 
-    flaskProcess.stderr.on("data", (data) => {
-      const text = data.toString();
-      if (text.includes("Traceback") || text.includes("Error")) {
-        console.error(`[Flask ERROR] ${text}`);
-        logToFile(`[Flask ERROR] ${text}`);
-      } else {
-        console.log(`[Flask LOG] ${text}`);
-        logToFile(`[Flask LOG] ${text}`);
-      }
-    });
-
-    flaskProcess.on("error", (err) => {
-      console.error("Flask 실행 실패:", err);
-      logToFile(`Flask 실행 실패: ${err.message}`);
-    });
-
-    flaskProcess.on("exit", (code, signal) => {
-      console.log(`[Flask 종료됨] code: ${code}, signal: ${signal}`);
-      logToFile(` Flask 종료됨 - code: ${code}, signal: ${signal}`);
-    });
-  } catch (err) {
-    console.error("포트 탐색 실패:", err);
-    logToFile(`포트 탐색 실패: ${err.message}`);
-    return;
-  }
-
-  createWindow();
-});
-
-// 종료 이벤트 처리
-app.on("before-quit", () => safeKillFlask("before-quit"));
-app.on("will-quit", () => safeKillFlask("will-quit"));
-process.on("SIGINT", () => safeKillFlask("SIGINT"));
-process.on("SIGTERM", () => safeKillFlask("SIGTERM"));
-
-// 창 컨트롤
-ipcMain.on("window-close", () => {
-  const win = BrowserWindow.getFocusedWindow();
-  if (win) {
-    safeKillFlask("window-close");
-    win.close();
-  }
-});
-ipcMain.on("window-minimize", () => {
-  const win = BrowserWindow.getFocusedWindow();
-  if (win) win.minimize();
-});
-ipcMain.on("window-maximize", () => {
-  const win = BrowserWindow.getFocusedWindow();
-  if (win) win.isMaximized() ? win.unmaximize() : win.maximize();
-});
-ipcMain.on("restart-app", () => {
-  safeKillFlask("restart-app");
-  app.relaunch();
-  app.exit(0);
-});
-
-// 폴더 선택
-ipcMain.handle("select-folder", async () => {
-  const result = await dialog.showOpenDialog({ properties: ["openDirectory"] });
-  return result.canceled ? null : result.filePaths[0];
-});
-
-// 파일 저장 핸들러
-ipcMain.handle("save-file", async (event, filename, content) => {
-  try {
-    const savePath = path.resolve(process.cwd(), filename);
-    fs.writeFileSync(savePath, content, "utf-8");
-    return savePath;
-  } catch (err) {
-    console.error("파일 저장 중 오류 발생:", err);
-    logToFile(`파일 저장 실패: ${err.message}`);
-    return null;
-  }
-});
-
-ipcMain.handle("save-zip-file", async (event, defaultName, buffer) => {
-  try {
-    const { canceled, filePath } = await dialog.showSaveDialog({
-      defaultPath: defaultName,
-      filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
-    });
-    if (canceled || !filePath) return null;
-    fs.writeFileSync(filePath, buffer);
-    return filePath;
-  } catch (e) {
-    console.error("ZIP 저장 실패:", e);
-    logToFile(`ZIP 저장 실패: ${e.message}`);
-    return null;
-  }
-});
+  ipcMain.handle("save-zip-file", async (event, defaultName, buffer) => {
+    try {
+      const { canceled, filePath } = await dialog.showSaveDialog({
+        defaultPath: defaultName,
+        filters: [{ name: "ZIP Archive", extensions: ["zip"] }],
+      });
+      if (canceled || !filePath) return null;
+      fs.writeFileSync(filePath, buffer);
+      return filePath;
+    } catch (e) {
+      console.error("ZIP 저장 실패:", e);
+      logToFile(`ZIP 저장 실패: ${e.message}`);
+      return null;
+    }
+  });
+}
