@@ -1151,7 +1151,7 @@ def vuddy_hashing(directory, isAbstraction="on", logger=None, progress_callback=
                     print("프로젝트 이름:", proj)
                     print("rel_path:", repr(rel_path))  # repr로 줄바꿈, 특수문자 확인
                 except Exception as e:
-                    print("🔥 경로 처리 중 오류 발생:", e)
+                    print("경로 처리 중 오류 발생:", e)
                     raise
 
 
