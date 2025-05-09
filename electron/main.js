@@ -59,6 +59,7 @@ function createWindow() {
   // win.webContents.openDevTools();
 }
 
+// 사용중인 포트 있을시 포트 동적 변경
 function findAvailablePort(start = 5000, end = 5100) {
   return new Promise((resolve, reject) => {
     let port = start;
@@ -119,10 +120,11 @@ function findAvailablePort(start = 5000, end = 5100) {
   });
 }
 
+// 앱 실행 중이면 중복 실행 방지
 const gotTheLock = app.requestSingleInstanceLock();
 
 if (!gotTheLock) {
-  console.log("⚠️ 다른 인스턴스가 이미 실행 중입니다. 종료합니다.");
+  console.log("다른 인스턴스가 이미 실행 중입니다. 종료합니다.");
   app.quit();
 } else {
   app.on("second-instance", (event, commandLine, workingDirectory) => {
