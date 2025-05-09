@@ -9,10 +9,12 @@ const { pathToFileURL } = require("url");
 app.disableHardwareAcceleration();
 
 const logFilePath = path.join(app.getPath("userData"), "hmark-log.txt");
+const localLogFilePath = path.resolve(process.cwd(), "hmark-log.txt");
 
 function logToFile(message) {
   const timestamp = new Date().toISOString();
   fs.appendFileSync(logFilePath, `[${timestamp}] ${message}\n`);
+  fs.appendFileSync(localLogFilePath, `[${timestamp}] ${message}\n`);
 }
 
 let flaskProcess = null;
@@ -243,8 +245,16 @@ if (!gotTheLock) {
   // 파일 저장 핸들러
   ipcMain.handle("save-file", async (event, filename, content) => {
     try {
-      const savePath = path.resolve(process.cwd(), filename);
+      // 현재 디렉토리에 "hidx" 폴더가 없으면 생성
+      const folderPath = path.resolve(process.cwd(), "hidx");
+      if (!fs.existsSync(folderPath)) {
+        fs.mkdirSync(folderPath, { recursive: true });
+      }
+
+      // "hidx" 폴더 안에 파일 저장
+      const savePath = path.join(folderPath, filename);
       fs.writeFileSync(savePath, content, "utf-8");
+
       return savePath;
     } catch (err) {
       console.error("파일 저장 중 오류 발생:", err);

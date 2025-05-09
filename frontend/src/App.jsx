@@ -98,14 +98,14 @@ const App = () => {
               `hashmark_0_${name}.hidx`,
               hatbomData.hidx
             );
-            setSavedPath(saved || "❌ 저장 실패");
+            setSavedPath(saved || " 저장 실패");
           } else {
-            setHatbomMessage("❌ hatbom 서버 오류");
+            setHatbomMessage("hatbom 서버 오류");
           }
         })
         .catch((err) => {
-          console.error("❌ hatbom 통신 에러:", err);
-          setHatbomMessage("❌ 요청 실패");
+          console.error("hatbom 통신 에러:", err);
+          setHatbomMessage("요청 실패");
         })
         .finally(() => {
           setHatbomInProgress(false);
@@ -120,14 +120,14 @@ const App = () => {
               `hashmark_4_${name}.hidx`,
               vuddyData.hidx
             );
-            setVuddySavedPath(saved || "❌ 저장 실패");
+            setVuddySavedPath(saved || "저장 실패");
           } else {
-            setVuddyMessage("❌ vuddy 서버 오류");
+            setVuddyMessage("vuddy 서버 오류");
           }
         })
         .catch((err) => {
-          console.error("❌ vuddy 통신 에러:", err);
-          setVuddyMessage("❌ 요청 실패");
+          console.error("vuddy 통신 에러:", err);
+          setVuddyMessage("요청 실패");
         })
         .finally(() => {
           setVuddyInProgress(false);
@@ -298,8 +298,8 @@ const App = () => {
             outline: "none",
           }}
         >
-          <Tab label="Hatbom 결과" sx={tabStyle} />
-          <Tab label="Vuddy 결과" sx={tabStyle} />
+          <Tab label="Hatbom" sx={tabStyle} />
+          <Tab label="Vuddy" sx={tabStyle} />
         </Tabs>
         <ProgressBar
           current={currentProgress.current}
