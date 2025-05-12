@@ -54,9 +54,11 @@ function createWindow() {
     },
   });
 
-  const indexPath = path.resolve(__dirname, "../frontend/dist/index.html");
-  const indexURL = pathToFileURL(indexPath).href;
-  win.loadURL(indexURL);
+  // const indexPath = path.resolve(__dirname, "../frontend/dist/index.html"); // 실제 배포시 사용
+  // const indexURL = pathToFileURL(indexPath).href;
+  // win.loadURL(indexURL);
+
+  win.loadURL("http://localhost:5173"); // 개발시 사용
 
   // win.webContents.openDevTools();
 }

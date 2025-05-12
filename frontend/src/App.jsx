@@ -322,20 +322,23 @@ const App = () => {
         >
           {currentLogs.join("\n")}
         </Box>
-        <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
-          📁 Save File Path: <br />
-          <code>{currentSavedPath}</code>
-        </Typography>
         <Box sx={{ mt: 2 }}>
-          <Button variant="outlined" onClick={handleZipDownload}>
-            ZIP Download
-          </Button>
-          {zipPath && (
-            <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
-              🗜️ Saved ZIP Path: <br />
-              <code>{zipPath}</code>
-            </Typography>
-          )}
+          <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
+            📁 Saved File Path: <br />
+            <code>{currentSavedPath}</code>
+          </Typography>
+        </Box>
+
+        <Box sx={{ mt: 2 }}>
+          <Typography sx={{ mt: 1, fontSize: 14, color: "#555" }}>
+            📁 Saved ZIP Path: <br />
+            <code>{zipPath}</code>
+          </Typography>
+          <Box sx={{ display: "flex", justifyContent: "right", mt: 2 }}>
+            <Button variant="outlined" onClick={handleZipDownload}>
+              ZIP Download
+            </Button>
+          </Box>
         </Box>
       </Box>
     </Box>
